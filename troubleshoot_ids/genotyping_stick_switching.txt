@@ -1,0 +1,119 @@
+#genotyping_stick_switching.txt
+
+#start with bam files from the tag-seq and mdRAD datasets
+
+ls mdRAD-*.bam | wc -l
+ls tagSeq-*.bam | wc -l
+#96
+
+##################################################
+############ SPLIT BAMS BY CHROMOSOME ############
+##################################################
+
+#get chromosome list
+source /work/02260/grovesd/stampede2/myReferences/amilleporaReference.sh
+
+
+grep "^>" $GENOME_PATH | sed 's/>//' | cut -f 1 -d " " | head -n 14 > chromList.txt
+
+
+#set up subsetting commands
+module load samtools
+>sepChroms
+for file in *.bam
+do while read p
+do echo "samtools view -b -h -o ${file/.bam/_${p}.bam} $file $p && samtools index ${file/.bam/_${p}.bam}"
+done<chromList.txt >> sepChroms
+done
+
+launcher_creator.py -n sepChroms -j sepChroms -q development -N 1 -w 64 -a $allo -e $email -t 01:00:00
+
+#################################################
+################## RUN MPILEUP ##################
+#################################################
+
+source /work/02260/grovesd/stampede2/myReferences/amilleporaReference.sh
+
+#set up bam lists for each chrom
+while read chr
+do ls *_${chr}.bam > ${chr}_bamlist.txt
+done < chromList.txt
+
+#check
+wc -l *bamlist.txt
+
+
+module load samtools
+>runmpile
+for file in *_bamlist.txt
+do echo "samtools mpileup -f $GENOME_PATH -t DP,AD,ADF,ADR,SP -u -v -b $file > ${file/bamlist.txt/mpileupResults.vcf}" >> runmpile
+done
+
+launcher_creator.py -n mpileStick -j runmpile -q normal -N 2 -w 7 -a $allo -e $email -t 24:00:00
+
+#now call genotypes
+module load samtools
+>callQuality
+for file in *_mpileupResults.vcf
+do echo "bcftools call -vmO v -o ${file/_mpileupResults.vcf/_rawCalls.vcf} $file && \
+bcftools filter --exclude 'QUAL < 20' ${file/_mpileupResults.vcf/_rawCalls.vcf} | \
+bcftools view > ${file/_mpileupResults.vcf/_filt0.vcf}" >>callQuality
+done
+
+launcher_creator.py -n callQuality -j callQuality -q development -N 1 -w 14 -a $allo -e $email -t 01:00:00
+
+ls *filt0.vcf | wc -l
+
+
+#do all filtering steps at once:
+>filtAll
+for file in *filt0.vcf
+do filt1File=${file/filt0.vcf/filt1.vcf}
+singletonOut=${file/_filt0.vcf/}
+singletonFile=${singletonOut}_toRemove.tsv
+filt2File=${file/filt0.vcf/filt2.vcf}
+echo "vcftools --vcf $file --remove-indels --min-meanDP 3 --min-alleles 2 --max-alleles 2 --recode --recode-INFO-all -c > $filt1File && \
+vcftools --vcf $filt1File --singletons --out $singletonOut && \
+cat ${singletonOut}.singletons | awk '{print \$1\"\\t\"\$2}' > $singletonFile && \
+vcftools --vcf $filt1File --exclude-positions $singletonFile --recode -c > $filt2File" >>filtAll
+done
+
+launcher_creator.py -n filtAll -j filtAll -q development -N 1 -w 14 -a $allo -t 01:00:00
+
+
+
+#filter for sites found in both
+for file in *filt2.vcf
+do echo "vcftools --vcf $file --max-missing 0.8 --recode -c > ${file/_filt2.vcf}_filt3.vcf"
+done
+
+#check how many we got
+for file in *filt3.vcf
+do echo "------"; echo $file; vcftools --vcf $file
+done
+
+#fix the names
+ for file in chr*filt3.vcf
+ do CHR=${file/_filt3.vcf/}
+ echo "sed -i.bak s/_${CHR}.bam//g $file"
+ done
+
+#assemble into single vcf
+bcftools concat -o all_filt3.vcf chr*filt3.vcf
+
+
+#imput to handle missing data
+
+java -jar /work/02260/grovesd/lonestar/beagle/beagle.08Jun17.d8b.jar impute=true gt=all_filt3.vcf niterations=10 out=all_filt_inputed.vcf nthreads=1
+
+
+
+
+
+
+
+
+
+
+
+

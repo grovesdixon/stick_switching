@@ -1,0 +1,97 @@
+sampleNumber,colony,age,treatment,timepointTemp,notebookPg,samplingTimepoint,date,time,timepointDescription,specialNote
+1,N1,y,heat,,8,0,1-Dec,18:00,initial,N1yH0
+2,L1,o,heat,,8,0,1-Dec,18:00,initial,L1oH0
+3,N1,o,heat,,8,0,1-Dec,18:00,initial,N1oH0
+4,L1,y,heat,,8,0,1-Dec,18:00,initial,L1yH0
+5,N4,o,heat,,8,0,1-Dec,18:00,initial,N4oH0
+6,N4,y,heat,,8,0,1-Dec,18:00,initial,N4yH0
+7,N4,o,control,,8,0,?,?,initial,N4oC0
+8,N4,y,control,,8,0,?,?,initial,N4yC0
+9,L1,o,control,,8,0,?,?,initial,L1oC0
+10,L1,y,control,,8,0,?,?,initial,L1yC0
+11,N1,y,control,,8,0,?,?,initial,N1yC0
+12,N1,y,control,,8,0,?,?,initial,N1yC0(B)
+13,N1,y,heat,hot,17,1,5-Dec,14:40,3 days of heat,
+14,N1,o,heat,hot,17,1,5-Dec,14:40,3 days of heat,
+15,L1,y,heat,hot,17,1,5-Dec,14:40,3 days of heat,
+16,L1,o,heat,hot,17,1,5-Dec,14:40,3 days of heat,
+17,N4,y,heat,hot,17,1,5-Dec,14:40,3 days of heat,
+18,N4,o,heat,hot,17,1,5-Dec,14:40,3 days of heat,
+19,N1,y,heatSwitched,hot,17,1,5-Dec,14:40,3 days of heat,order of frags reversed in tank (does not affect sample numbering!)
+20,N1,o,heatSwitched,hot,17,1,5-Dec,14:40,3 days of heat,order of frags reversed in tank (does not affect sample numbering!)
+21,L1,y,heatSwitched,hot,17,1,5-Dec,14:40,3 days of heat,order of frags reversed in tank (does not affect sample numbering!)
+22,L1,o,heatSwitched,hot,17,1,5-Dec,14:40,3 days of heat,order of frags reversed in tank (does not affect sample numbering!)
+23,N4,y,heatSwitched,hot,17,1,5-Dec,14:40,3 days of heat,order of frags reversed in tank (does not affect sample numbering!)
+24,N4,o,heatSwitched,hot,17,1,5-Dec,14:40,3 days of heat,order of frags reversed in tank (does not affect sample numbering!)
+25,N1,y,control,hot,17,1,5-Dec,14:40,3 days of heat,
+26,N1,o,control,hot,17,1,5-Dec,14:40,3 days of heat,
+27,L1,y,control,hot,17,1,5-Dec,14:40,3 days of heat,
+28,L1,o,control,hot,17,1,5-Dec,14:40,3 days of heat,
+29,N4,y,control,hot,17,1,5-Dec,14:40,3 days of heat,
+30,N4,o,control,hot,17,1,5-Dec,14:40,3 days of heat,
+31,N1,y,heat,cool,17,1,6-Dec,8:30,3 days of heat,
+32,N1,o,heat,cool,17,1,6-Dec,8:30,3 days of heat,
+33,L1,y,heat,cool,17,1,6-Dec,8:30,3 days of heat,
+34,L1,o,heat,cool,17,1,6-Dec,8:30,3 days of heat,
+35,N4,y,heat,cool,17,1,6-Dec,8:30,3 days of heat,
+36,N4,o,heat,cool,17,1,6-Dec,8:30,3 days of heat,
+37,N1,y,heatSwitched,cool,17,1,6-Dec,8:30,3 days of heat,
+38,N1,o,heatSwitched,cool,17,1,6-Dec,8:30,3 days of heat,
+39,L1,y,heatSwitched,cool,17,1,6-Dec,8:30,3 days of heat,
+40,L1,o,heatSwitched,cool,17,1,6-Dec,8:30,3 days of heat,
+41,N4,y,heatSwitched,cool,17,1,6-Dec,8:30,3 days of heat,
+42,N4,o,heatSwitched,cool,17,1,6-Dec,8:30,3 days of heat,
+43,N1,y,control,cool,17,1,6-Dec,8:30,3 days of heat,
+44,N1,o,control,cool,17,1,6-Dec,8:30,3 days of heat,
+45,L1,y,control,cool,17,1,6-Dec,8:30,3 days of heat,
+46,L1,o,control,cool,17,1,6-Dec,8:30,3 days of heat,
+47,N4,y,control,cool,17,1,6-Dec,8:30,3 days of heat,
+48,N4,o,control,cool,17,1,6-Dec,8:30,3 days of heat,
+49,N4,o,heat,hot,18,2,14-Dec,14:00,14 days of heat,these were the samples originally recorded in reverse order but are fixed now. See original_wrong_sample_information_table.csv for this version. Fix made 5-3-20
+50,N4,y,heat,hot,19,2,14-Dec,14:00,14 days of heat,these were the samples originally recorded in reverse order but are fixed now. See original_wrong_sample_information_table.csv for this version. Fix made 5-3-20
+51,L1,o,heat,hot,19,2,14-Dec,14:00,14 days of heat,these were the samples originally recorded in reverse order but are fixed now. See original_wrong_sample_information_table.csv for this version. Fix made 5-3-20
+52,L1,y,heat,hot,19,2,14-Dec,14:00,14 days of heat,these were the samples originally recorded in reverse order but are fixed now. See original_wrong_sample_information_table.csv for this version. Fix made 5-3-20
+53,N1,o,heat,hot,19,2,14-Dec,14:00,14 days of heat,these were the samples originally recorded in reverse order but are fixed now. See original_wrong_sample_information_table.csv for this version. Fix made 5-3-20
+54,N1,y,heat,hot,19,2,14-Dec,14:00,14 days of heat,these were the samples originally recorded in reverse order but are fixed now. See original_wrong_sample_information_table.csv for this version. Fix made 5-3-20
+55,N4,o,heatSwitched,hot,19,2,14-Dec,14:00,14 days of heat,these were the samples originally recorded in reverse order but are fixed now. See original_wrong_sample_information_table.csv for this version. Fix made 5-3-20
+56,N4,y,heatSwitched,hot,19,2,14-Dec,14:00,14 days of heat,these were the samples originally recorded in reverse order but are fixed now. See original_wrong_sample_information_table.csv for this version. Fix made 5-3-20
+57,L1,o,heatSwitched,hot,19,2,14-Dec,14:00,14 days of heat,these were the samples originally recorded in reverse order but are fixed now. See original_wrong_sample_information_table.csv for this version. Fix made 5-3-20
+58,L1,y,heatSwitched,hot,19,2,14-Dec,14:00,14 days of heat,these were the samples originally recorded in reverse order but are fixed now. See original_wrong_sample_information_table.csv for this version. Fix made 5-3-20
+59,N1,o,heatSwitched,hot,19,2,14-Dec,14:00,14 days of heat,these were the samples originally recorded in reverse order but are fixed now. See original_wrong_sample_information_table.csv for this version. Fix made 5-3-20
+60,N1,y,heatSwitched,hot,19,2,14-Dec,14:00,14 days of heat,these were the samples originally recorded in reverse order but are fixed now. See original_wrong_sample_information_table.csv for this version. Fix made 5-3-20
+61,N4,o,control,hot,19,2,14-Dec,14:00,14 days of heat,these were the samples originally recorded in reverse order but are fixed now. See original_wrong_sample_information_table.csv for this version. Fix made 5-3-20
+62,N4,y,control,hot,19,2,14-Dec,14:00,14 days of heat,these were the samples originally recorded in reverse order but are fixed now. See original_wrong_sample_information_table.csv for this version. Fix made 5-3-20
+63,L1,o,control,hot,19,2,14-Dec,14:00,14 days of heat,these were the samples originally recorded in reverse order but are fixed now. See original_wrong_sample_information_table.csv for this version. Fix made 5-3-20
+64,L1,y,control,hot,19,2,14-Dec,14:00,14 days of heat,these were the samples originally recorded in reverse order but are fixed now. See original_wrong_sample_information_table.csv for this version. Fix made 5-3-20
+65,N1,o,control,hot,19,2,14-Dec,14:00,14 days of heat,these were the samples originally recorded in reverse order but are fixed now. See original_wrong_sample_information_table.csv for this version. Fix made 5-3-20
+66,N1,y,control,hot,19,2,14-Dec,14:00,14 days of heat,these were the samples originally recorded in reverse order but are fixed now. See original_wrong_sample_information_table.csv for this version. Fix made 5-3-20
+67,N4,o,heat,cool,19,2,15-Dec,8:30,14 days of heat,these were the samples originally recorded in reverse order but are fixed now. See original_wrong_sample_information_table.csv for this version. Fix made 5-3-20
+68,N4,y,heat,cool,19,2,15-Dec,8:30,14 days of heat,these were the samples originally recorded in reverse order but are fixed now. See original_wrong_sample_information_table.csv for this version. Fix made 5-3-20
+69,L1,o,heat,cool,19,2,15-Dec,8:30,14 days of heat,these were the samples originally recorded in reverse order but are fixed now. See original_wrong_sample_information_table.csv for this version. Fix made 5-3-20
+70,L1,y,heat,cool,19,2,15-Dec,8:30,14 days of heat,these were the samples originally recorded in reverse order but are fixed now. See original_wrong_sample_information_table.csv for this version. Fix made 5-3-20
+71,N1,o,heat,cool,19,2,15-Dec,8:30,14 days of heat,these were the samples originally recorded in reverse order but are fixed now. See original_wrong_sample_information_table.csv for this version. Fix made 5-3-20
+72,N1,y,heat,cool,19,2,15-Dec,8:30,14 days of heat,these were the samples originally recorded in reverse order but are fixed now. See original_wrong_sample_information_table.csv for this version. Fix made 5-3-20
+73,N1,y,heatSwitched,cool,19,2,15-Dec,8:30,14 days of heat,sampled earlier than planned bc of cyclone warning; so 14 days of heat not actually accurate
+74,N1,o,heatSwitched,cool,19,2,15-Dec,8:30,14 days of heat,sampled earlier than planned bc of cyclone warning; so 14 days of heat not actually accurate
+75,L1,y,heatSwitched,cool,19,2,15-Dec,8:30,14 days of heat,sampled earlier than planned bc of cyclone warning; so 14 days of heat not actually accurate
+76,L1,o,heatSwitched,cool,19,2,15-Dec,8:30,14 days of heat,sampled earlier than planned bc of cyclone warning; so 14 days of heat not actually accurate
+77,N4,y,heatSwitched,cool,19,2,15-Dec,8:30,14 days of heat,sampled earlier than planned bc of cyclone warning; so 14 days of heat not actually accurate
+78,N4,o,heatSwitched,cool,19,2,15-Dec,8:30,14 days of heat,sampled earlier than planned bc of cyclone warning; so 14 days of heat not actually accurate
+79,N1,y,control,cool,19,2,15-Dec,8:30,14 days of heat,sampled earlier than planned bc of cyclone warning; so 14 days of heat not actually accurate
+80,N1,o,control,cool,19,2,15-Dec,8:30,14 days of heat,sampled earlier than planned bc of cyclone warning; so 14 days of heat not actually accurate
+81,L1,y,control,cool,19,2,15-Dec,8:30,14 days of heat,sampled earlier than planned bc of cyclone warning; so 14 days of heat not actually accurate
+82,L1,o,control,cool,19,2,15-Dec,8:30,14 days of heat,sampled earlier than planned bc of cyclone warning; so 14 days of heat not actually accurate
+83,N4,y,control,cool,19,2,15-Dec,8:30,14 days of heat,sampled earlier than planned bc of cyclone warning; so 14 days of heat not actually accurate
+84,N4,o,control,cool,19,2,15-Dec,8:30,14 days of heat,sampled earlier than planned bc of cyclone warning; so 14 days of heat not actually accurate
+85,N4,o,control,NA,43,3,16-Dec,evening?,final meth experiment fix,sampling done by Grovea; pattern no longer matches previous; labels by ziptie color in notebook
+86,N4,y,control,NA,43,3,16-Dec,evening?,final meth experiment fix,sampling done by Grovea; pattern no longer matches previous; labels by ziptie color in notebook
+87,L1,o,control,NA,43,3,16-Dec,evening?,final meth experiment fix,sampling done by Grovea; pattern no longer matches previous; labels by ziptie color in notebook
+88,L1,y,control,NA,43,3,16-Dec,evening?,final meth experiment fix,sampling done by Grovea; pattern no longer matches previous; labels by ziptie color in notebook
+89,N1,o,control,NA,43,3,16-Dec,evening?,final meth experiment fix,sampling done by Grovea; pattern no longer matches previous; labels by ziptie color in notebook
+90,N1,y,control,NA,43,3,16-Dec,evening?,final meth experiment fix,sampling done by Grovea; pattern no longer matches previous; labels by ziptie color in notebook
+91,N1,y,heat,NA,43,3,16-Dec,evening?,final meth experiment fix,sampling done by Grovea; pattern no longer matches previous; labels by ziptie color in notebook
+92,N1,o,heat,NA,43,3,16-Dec,evening?,final meth experiment fix,sampling done by Grovea; pattern no longer matches previous; labels by ziptie color in notebook
+93,L1,y,heat,NA,43,3,16-Dec,evening?,final meth experiment fix,sampling done by Grovea; pattern no longer matches previous; labels by ziptie color in notebook
+94,L1,o,heat,NA,43,3,16-Dec,evening?,final meth experiment fix,sampling done by Grovea; pattern no longer matches previous; labels by ziptie color in notebook
+95,N4,y,heat,NA,43,3,16-Dec,evening?,final meth experiment fix,sampling done by Grovea; pattern no longer matches previous; labels by ziptie color in notebook
+96,N4,o,heat,NA,43,3,16-Dec,evening?,final meth experiment fix,sampling done by Grovea; pattern no longer matches previous; labels by ziptie color in notebook
