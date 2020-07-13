@@ -17,6 +17,17 @@ names(countsList)=names
 names(posList)=names
 names(lengthList)=names
 
+#TEMP FIX FOR NAMES 
+#this is here now to handle the plate rotation, won't be necessary if matrix comes from renamed fastq files
+#see troubleshoot_ids.R
+ll=load('troubleshoot_ids/name_rotations.Rdata')
+for (n in names(countsList)){
+  old_dat = countsList[[n]]
+  colnames(old_dat) = rs_dat$rot_sampleID
+  new_dat = old_dat[,as.character(rs_dat$sampleID)]
+  countsList[[n]] = new_dat
+}
+
 # SET UP COLDATA ----------------------------------------------------------
 
 #revise names in counts table
@@ -28,7 +39,7 @@ data.frame(colnames = colnames(counts),
            snum = snum)
 
 #load sample data
-coldata = read_csv('metadata/sample_information_table.csv')
+coldata = read_csv('metadata/sample_information_table.csv') #this is the correct one
 
 #check alignment
 sum(coldata$sampleNumber==as.numeric(snum))==nrow(coldata)

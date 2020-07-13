@@ -1,152 +1,188 @@
-#toubleshoot_ids.R
+#assign_genotypes.R
 
-
-rm(list=ls())
-library(vegan)
-library(gtools)
-library(DESeq2)
+library(vcfR)
+library(adegenet)
+library(readxl)
 source('my_functions.R')
 
-# COMPARE MISLABELED WITH GSAF UPLOAD -------------------------------------
+# load genotypes ----------------------------------------------------------
 
-#upload the barcodes submitted to gsaf
-library(readxl)
-gsaf = read_excel('metadata/GSAFSampleUpload.xlsx') %>% 
-  filter(!grepl('^JP', SampleName)) %>% 
-  mutate(num = sub('tagSeq.', '', SampleName, fixed=TRUE),
-         num = sub('mdRAD.', '', num, fixed=TRUE),
-         num = as.numeric(num)) %>% 
-  dplyr::rename(i7 = `Barcode i7 ("standard")`,
-                i5 = `Barcode i5 (Dual index)`) %>% 
-  dplyr::select(-`Sample Description`)
-sum(table(gsaf$num)==2) #two reps of each sample number (one for tagseq one for mdRAD)
+vcfInput = 'troubleshoot_ids/all_filt3_imputed.vcf'
+N.CORES = 3
+gll=vcfR2genlight(read.vcfR(vcfInput))
+print(gll)
 
 
-#double-check that numbers are always matched
-tag = gsaf %>% 
-  filter(grepl('^tagSeq', SampleName))
-md = gsaf %>% 
-  filter(grepl('^mdRAD', SampleName))
-match = tag %>% 
-  full_join(md, by = 'num')
-sum(match$i7.x==match$i7.y)
-#good, they did
+# check for missing data --------------------------------------------------
+
+missing = glNA(gll)
+has_missing = missing > 0
+n_has_missing = sum(has_missing)
+tot_loci = ncol(gll)
+pct_missing = round((n_has_missing / tot_loci), 3)*100
+pct_string = paste('(', pct_missing, '%)', sep='')
+good = which(!has_missing)
+if (n_has_missing > 0){
+  print(paste('WARNING.', n_has_missing, 'of', tot_loci, pct_string, 'loci have at least one NA and will be removed before PCA'))
+  gll = gll[,good]
+  print('Summary of new genlight object:')
+  print(gll)
+}
 
 
-#upload my barcode sequence-number table
-barcodes = read_csv('metadata/oligo_barcode_sequences_rc.csv')
-
-#slice out i7 sequences
-i7bcs = barcodes %>% 
-  filter(grepl('^ILL', oligo)) %>% 
-  set_names(c('oligo', 'for', 'i7')) %>% 
-  dplyr::select(oligo, i7)
-
-#check presence in gsaf upload df
-i7_seqs = unique(i7bcs$i7)
-length(i7_seqs)
-length(unique(gsaf$i7))
-sum(i7_seqs %in% gsaf$i7)
-#these were sequenced with Novaseq, so i7 barcodes were given as reverse compliment
-#we used 36 of the 72 barcodes that we have in this study
-#all samples have a fastq from GSAF, so we know all barcodes made it in
+#run PCA
+pca=glPca(gll, nf=2, n.cores=N.CORES)
+p=pca$scores
 
 
-#splice out i5 sequences ()
-i5bcs = barcodes %>% 
-  filter(grepl('^TruSeq', oligo)) %>% 
-  set_names(c('oligo', 'i5', 'rc')) %>% 
-  dplyr::select(oligo, i5)
+# merge with trait labels -------------------------------------------------
 
-#check presence in gsaf upload df
-i5_seqs = unique(i5bcs$i5)
-length(i5_seqs)
-length(unique(gsaf$i5))
-sum(i5_seqs %in% gsaf$i5)
-#i5 barcodes were given in forward direction
-#we used all 6 of our i5 (TrueSeqUN) barcodes for this study
-#all samples have a fastq from GSAF, so we know all barcodes made it in
+#here use the original sample spreadsheet for illustration
+#the one in metadata has been corrected
+coldata = read_csv('troubleshoot_ids/original_wrong_sample_information_table.csv')
+
+# plot --------------------------------------------------------------------
+
+geno_pca_df = pca$scores %>% 
+  data.frame() %>% 
+  rownames_to_column('sample') %>% 
+  mutate(sampleNumber = sample_numbers_from_names(sample),
+         assay = substr(sample, start=1, stop=5)) %>% 
+  left_join(coldata) %>% 
+  as_tibble()
+
+#function to plot
+plot_pca = function(pca_df, pc1, pc2){
+  pca_df %>% 
+    mutate(assay = substr(sample, start=1, stop=5)) %>% 
+    ggplot(aes_string(x=pc1, y=pc2, color = 'colony', shape='assay')) +
+    geom_point(size=4)
+}
+
+gplt = plot_pca(geno_pca_df, 'PC1', 'PC2')
+
+#get stats on clusters
+mod_df = geno_pca_df %>% 
+  mutate(gi_colony = if_else(PC2 > 5,
+                             'L1',
+                             'unassigned'),
+         gi_colony = if_else(PC2 < 5 & PC1 < 0,
+                             'N4',
+                             gi_colony),
+         gi_colony = if_else(PC2 < 5 & PC1 > 0,
+                             'N1',
+                             gi_colony)) %>% 
+  dplyr::rename(geno_PC1 = PC1,
+         geno_PC2 = PC2)
+
+#check inferred assignments
+gi_plt = mod_df %>% 
+  ggplot(aes(x=geno_PC1, y=geno_PC2, color=gi_colony)) +
+  geom_point(size=4) +
+  labs(color = 'inferred colony')
 
 
-#ADD IN THE BARCODE IDS TO GSAF
-gsaf2 = gsaf %>% 
-  left_join(i7bcs, by = 'i7') %>% 
-  dplyr::rename(i7oligo = oligo) %>% 
-  left_join(i5bcs, by = 'i5') %>% 
-  dplyr::rename(i5oligo = oligo) %>% 
-  arrange(num) %>% 
-  dplyr::rename(sampleNumber=num)
+plot_grid(gplt, gi_plt)
+
+#look at mdRAD mismatches
+mod_df %>% 
+  filter(assay=='mdRAD',
+         colony != gi_colony) %>% 
+  arrange(sampleNumber) %>% 
+  tail
 
 
-gsaf_tag = gsaf2 %>% 
-  filter(grepl('tagSeq', SampleName))
+# look at mdRAD results ----------------------------------------------------
 
-gsaf_md = gsaf2 %>% 
-  filter(grepl('mdRAD', SampleName))
-
-
-
-# TEST ROTATION HYPOTHESIS ------------------------------------------------
-
-#upload the tagseq pca dataframe
-ll=load('metadata/raw_tagseq_pca_df.Rdata')
+library(DESeq2)
+#load fpkm data for gbm
+ll=load('troubleshoot_ids/mdRAD_geneFPKMs.Rdata')
 ll
 
-#show the mixups
-pca_df %>% 
+#build pca
+NTOP = round(nrow(geneFpkm) / 5, 0)
+md_pca_df = build_pca(geneFpkm, coldata,
+                   ntop = NTOP,
+                   pcs = 2)
+
+#plot for colony
+ori_md_plt = md_pca_df %>% 
   ggplot(aes(x=PC1, y=PC2, color=colony)) +
   geom_point(size=5)
+ori_md_plt
 
-#idea here is to search for a way to rotate the 96-well plate that fixes things
+#view mismatches
+md_N4_mm0 = md_pca_df %>% 
+  filter(PC1 < 0,
+         colony != 'N1')
 
-#read in the plate with genotype labels
-gplate = read_excel('troubleshoot_ids/genotype_plate.xlsx') %>% 
-  column_to_rownames('row')
-#read in teh plate with sample numbers
-splate = read_excel('troubleshoot_ids/sample_number_plate.xlsx') %>% 
-  column_to_rownames('row')
+md_N1_mm0 = md_pca_df %>% 
+  filter(PC1 > 0,
+         PC2 < 0,
+         colony != 'N4')
 
-#these can be built from the data as well
-column_to_plate = function(column_string){
+md_L1_mm0 = md_pca_df %>% 
+  filter(PC1 > 0,
+         PC2 > 0,
+         colony != 'L1')
+
+md_pca_df %>% 
+  filter(sampleNumber %in% c(1,96))
+
+
+
+
+# hypothesize plate rotation ----------------------------------------------
+
+#function to convert a column from the coldata into 96-well plate format based on how they were prepared
+column_to_plate = function(coldata, column_string){
   m=coldata %>% 
     dplyr::select(c('sampleNumber', column_string)) %>% 
     arrange(sampleNumber) %>% 
     pull(column_string) %>% 
     matrix(nrow=8, ncol=12)
-  colnames(m) = paste('c', 1:12)
+  colnames(m) = paste('c', 1:12, sep='')
   rownames(m) = LETTERS[1:8]
-  return(m)
+  m %>% 
+    as_tibble()
 }
 
-#check
-gplate_from_dat=column_to_plate('colony')
-gplate_from_dat == gplate
+#make genotype and samle number 96-well plate
+gplate=column_to_plate(coldata, 'colony')
+splate = column_to_plate(coldata, 'sampleNumber')
 
-#build other types of plates
-treat_plate = column_to_plate('treatment')
-time_plate = column_to_plate('timepointDescription')
+#double-check against the manually built one
+gplate_manual = read_excel('troubleshoot_ids/genotype_plate.xlsx') %>% 
+  column_to_rownames('row')
+sum(gplate==gplate_manual)
 
-
-#rotate the splate 180 degrees
+#function to rotate a palte 180 degrees
 rotate_plate = function(plate){
   rot_plate = matrix(nrow=nrow(plate),
                      ncol=ncol(plate))
   colnames(rot_plate) = colnames(plate)
   rownames(rot_plate) = rownames(plate)
-  rev_plate = rev(plate)
+  rev_plate = rev(data.frame(plate))
   for (i in 1:ncol(rot_plate)){
     rot_plate[,i] = rev(rev_plate[,i])
   }
   return(rot_plate)
 }
-r_splate = rotate_plate(splate)
+
+#rotate the plates
 r_gplate = rotate_plate(gplate)
+r_splate = rotate_plate(splate)
+
+#write them out for reference
+r_gplate %>% 
+  data.frame() %>% 
+  write_csv(path='troubleshoot_ids/rotated_genotype_plate.csv')
+r_splate %>% 
+  data.frame() %>% 
+  write_csv(path='troubleshoot_ids/rotated_sampleNumber_plate.csv')
 
 
-#pair up plates
-
-plate_list = list(splate, gplate)
-colnames = c('plateSampleNumber', 'plateColony')
+#function to combine two 96-well plate back into dataframe
 combine_plates = function(plate_list,
                           colnames){
   coldat_list = list()
@@ -160,563 +196,233 @@ combine_plates = function(plate_list,
     as_tibble()
 }
 
-ori_plate_dat = combine_plates(list(splate, gplate, treat_plate, time_plate),
-                           c('sampleNumber', 'plateColony', 'treat', 'time'))
-rot_plate_dat = combine_plates(list(r_splate, gplate),
-                               c('sampleNumber', 'rot_plateColony'))
-plate_dat = ori_plate_dat %>% 
+#combine the rotated genotypes with the original sample names
+rot_plate_dat = combine_plates(list(splate, r_splate, r_gplate),
+                               c('sampleNumber', 'rot_sampleNumber', 'rot_colony'))
+rot_plate_dat
+
+#merge back with trait data
+md_pca_df = md_pca_df %>% 
   left_join(rot_plate_dat, by = 'sampleNumber')
-sum(plate_dat$plateColony != plate_dat$rot_plateColony)
 
-plate_dat %>% 
-  filter(plateColony != rot_plateColony) %>% 
-  data.frame()
-
-
-mod_pca = pca_df %>% 
-  left_join(plate_dat, by='sampleNumber') %>% 
-  as_tibble()
-
-ori = mod_pca %>% 
-  ggplot(aes(x=PC1, y=PC2, color=colony)) +
+#plot original and roated genotypes
+rot_md_plt = md_pca_df %>% 
+  ggplot(aes(x=PC1, y=PC2, color = rot_colony)) +
   geom_point(size=4)
+plot_grid(ori_md_plt, rot_md_plt + labs(color='rotated colony'))
 
-plate = mod_pca %>% 
-  ggplot(aes(x=PC1, y=PC2, color=plateColony)) +
-  geom_point(size=4)
+#assemble the genotype mismatches
+md_N4_mm = md_pca_df %>% 
+  filter(PC1 < 0,
+         rot_colony != 'N4')
 
-rot = mod_pca %>% 
-  ggplot(aes(x=PC1, y=PC2, color=rot_plateColony)) +
-  geom_point(size=4)
+md_N1_mm = md_pca_df %>% 
+  filter(PC1 > 0,
+         PC2 < 0,
+         rot_colony != 'N1')
+md_mm = rbind(md_N4_mm,
+              md_N1_mm)
 
-plot_grid(ori, plate, rot, nrow=3)
-#so you can rotate the entire plate without messing up very many L1s
-
-#now create an 'isolated' rotationto fix the cluster that's wrong in tagseq (see barcoding_plates_GD_5-1-20)
-splate
-to_rotate = splate[,c(7:9)]
-left = splate[,c(1:6)]
-right = splate[,c(10:12)]
-rotated0 = rotate_plate(to_rotate)
-rotated = cbind(left, rotated0, right)
-iso_rot = combine_plates(list(rotated, gplate, treat_plate, time_plate),
-                         c('sampleNumber', 'rot_colony', 'rot_treat', 'rot_time'))
-
-mod_pca2 = pca_df %>% 
-  left_join(iso_rot, by='sampleNumber') %>% 
-  as_tibble()
-
-#plot original
-mod_pca2 %>% 
-  ggplot(aes(x=PC1, y=PC2, color=colony)) +
-  geom_point(size=4)
-
-mod_pca2 %>% 
-  ggplot(aes(x=PC1, y=PC2, color=rot_plateColony)) +
-  geom_point(size=4)
+#count the mismatches
+table(md_mm$colony)
+table(md_mm$rot_colony)
 
 
-mod_coldata = coldata %>% 
-  left_join(iso_rot, by = 'sampleNumber') %>% 
-  rownames_to_column('sampleID') %>% 
-  as_tibble() %>% 
-  unite('ROT',rot_colony, rot_time, rot_treat, sep='_', remove = FALSE) %>% 
-  unite('ORI', colony, timepointDescription, treatment, sep='_', remove = FALSE) %>% 
-  mutate(changed = ROT != ORI) %>% 
-  dplyr::select(-ROT, -ORI)
+# look at the tagseq data ----------------------------------------------------
 
-sum(mod_coldata$changed)
-
-
-# EXAMINE EFFECTS OF HYPOTHETICAL ROTATION --------------------------------
-
-#build a mod_coldata file that includes feature columsn resulting from rotations as above
-mod_coldata
-
-#upload the rld results from tagseq
-ll=load('tagSeq/data/rld.Rdata')
+#load
+ll = load('troubleshoot_ids/rld.Rdata')
 ll
-#modify
+
+#build pca
 rld.df = data.frame(assay(rld))
-colnames(rld.df) = sapply(colnames(rld.df), function(x) strsplit(x, '_')[[1]][1])
+NTOP = round(nrow(rld.df) / 5, 0)
+tag_pca_df = build_pca(rld.df, coldata,
+                   ntop = NTOP,
+                   pcs = 2)
+
+ori_tag_plt = tag_pca_df %>% 
+  ggplot(aes(x=PC1, y=PC2, color=colony)) +
+  geom_point(size=4)
+
+
+#assemble the genotype mismatches
+tag_N4_mm = tag_pca_df %>% 
+  filter(PC1 < 0,
+         PC2 > 0,
+         colony != 'N4')
+
+tag_N1_mm = tag_pca_df %>% 
+  filter(PC2 < 0,
+         !colony %in% c('N1', 'L1'))
+tag_mm = rbind(tag_N4_mm,
+               tag_N1_mm)
+
+#count the mismatches
+table(tag_mm$colony)
+
+
+# compare mdRAD and tagseq mismatches -------------------------------------
+
+#the same sample number are mismached for genotype
+md_nums = md_mm$rot_sampleNumber
+tag_nums = tag_mm %>% 
+  arrange(sampleNumber) %>% 
+  pull(sampleNumber)
+sum(md_nums %in% tag_nums) == length(md_nums)
+order(md_nums)
+
+
+
+# upload new correated sample traits --------------------------------------
+#(this one matches the one in metadata/)
+#noticed mistake when entering in data from the 
+#field notebook for the exact samples identified 
+
+fixed_coldata = read_csv('metadata/sample_information_table.csv')
+
+#merge the mdRAD data with fixed traits using the ROATED sample numbers
+
+#re-upload the mdRAD data
+ll=load('troubleshoot_ids/mdRAD_geneFPKMs.Rdata')
+ll
+
+#organize ids and numbers from counts matrix for fixing
+samples = colnames(geneFpkm)
+numbers0 = sapply(samples, function(x) strsplit(x, '_')[[1]][1])
+numbers = as.numeric(sub('mdRAD.', '', numbers0, fixed=TRUE))
+sdat = data.frame(sampleID = samples,
+                  sampleNumber = numbers)
+
+#get the rotated numbers
+rs_dat = md_pca_df %>% 
+  dplyr::select(sampleNumber, rot_sampleNumber) %>% 
+  left_join(sdat, by = 'sampleNumber') %>% 
+  as_tibble()
+
+#pull rotated sample IDs
+rot_sampleID = rs_dat %>% 
+  arrange(rot_sampleNumber) %>% 
+  pull(sampleID) %>% 
+  as.character()
+rs_dat$rot_sampleID = rot_sampleID
+rs_dat
+
+#rotate the fpkm matrix 
+rot_geneFpkm = geneFpkm[,rot_sampleID]
+colnames(rot_geneFpkm) = rs_dat$sampleID
+
+#rebuild the pca
+NTOP = round(nrow(rot_geneFpkm) / 5, 0)
+fixed_md_pca_df = build_pca(rot_geneFpkm, fixed_coldata,
+                      ntop = NTOP,
+                      pcs = 2)
+fixed_md_plt = fixed_md_pca_df %>% 
+  ggplot(aes(x=PC1, y = PC2, color=colony)) +
+  geom_point(size=4)
+
+plot_grid(ori_md_plt,
+          fixed_md_plt)
+ori_md_plt
+
+
+
+# replot the tag-seq data with fixed coldata ------------------------------
 
 #build pca
 NTOP = round(nrow(rld.df) / 5, 0)
-pca_df = build_pca(rld.df, mod_coldata,
-                   ntop = NTOP,
-                   pcs = 10)
-
-#check re-assignment
-plot_pca_comparison(rld.df, mod_coldata, COLOR='colony', SHAPE='timepointDescription', ROT_COLOR='rot_colony', ROT_SHAPE='rot_time')
-
-
-#check colony re-assignments
-pca_df %>% 
-  ggplot(aes(x=PC1, y=PC2, color=colony)) +
-  geom_point(size=5)
-pca_df %>% 
-  ggplot(aes(x=PC1, y=PC2, color=rot_colony)) +
-  geom_point(size=5)
-
-
-#build PCAs for individual colonies after assignments
-############### L1
-#subset for L1
-geno_string = 'L1'
-gcoldata = mod_coldata %>% 
-  filter(grepl(geno_string, colony))
-gids = paste('tagSeq.', gcoldata$sampleNumber, sep='')
-grld = rld.df[,gids]
-dim(gcoldata)
-dim(grld)
-
-#build pca
-NTOP = round(nrow(grld) / 10, 0)
-pca_df = build_pca(grld, gcoldata,
-                   ntop = NTOP,
-                   pcs = 10)
-#check colony time reassignments
-plot_pca_comparison(grld, gcoldata, COLOR='timepointDescription', SHAPE='treatment', ROT_COLOR='rot_time', ROT_SHAPE='rot_treat')
-
-#SUBSET FOR 14 DAY TIMEPOINT
-gt_coldata = mod_coldata %>% 
-  filter(grepl(geno_string, colony),
-         timepointDescription=='14 days of heat')
-gids = paste('tagSeq.', gt_coldata$sampleNumber, sep='')
-gt_rld = rld.df[,gids]
-plot_pca_comparison(gt_rld, gt_coldata, COLOR='timepointTemp', SHAPE='treatment', ROT_COLOR='timepointTemp', ROT_SHAPE='rot_treat')
-
-
-############## CONTROL FOR GENOTYPE, THEN CHECK FOR DOMINANT VARIATION
-#control for genotype
-library(limma)
-cont <- removeBatchEffect(rld.df, batch=mod_coldata$rot_colony)
-
-
-
-#plot
-plot_pca_comparison(cont, mod_coldata)
-
-
-#get rid of the initial timepoint, and repeat
-noi_coldata = mod_coldata %>% 
-  filter(timepointDescription != 'initial')
-gids = paste('tagSeq.', noi_coldata$sampleNumber, sep='')
-noi_cont = cont[,gids]
-plot_pca_comparison(noi_cont, noi_coldata)
-
-
-#get rid of the all but middle timepoints
-noi_coldata = mod_coldata %>% 
-  filter(!timepointDescription %in% c('initial', 'final meth experiment fix'))
-gids = paste('tagSeq.', noi_coldata$sampleNumber, sep='')
-noi_cont = cont[,gids]
-plot_pca_comparison(noi_cont, noi_coldata)
-
-sum(mod_coldata$timepointDescription==mod_coldata$rot_time)
-
-
-########## CONTROL FOR GENOTYPE AND TIME THEN LOOK AT RE-ASSIGNMENTS
-library(limma)
-dcont <- removeBatchEffect(rld.df,
-                          batch=mod_coldata$rot_colony,
-                          batch2=mod_coldata$rot_time)
-
-#plot
-plot_pca_comparison(dcont, mod_coldata,COLOR='timepointTemp', SHAPE='treatment', ROT_COLOR='rot_treat', ROT_SHAPE='rot_treat')
-
-
-
-# subset for 14 hours -----------------------------------------------------
-
-ts_coldata = mod_coldata %>% 
-  filter(timepointDescription=="14 days of heat")
-gids = paste('tagSeq.', ts_coldata$sampleNumber, sep='')
-ts_rld = rld.df[,gids]
-ts_cont = removeBatchEffect(ts_rld,
-                            batch=ts_coldata$rot_colony)
-plot_pca_comparison(ts_cont, ts_coldata,COLOR='timepointTemp', SHAPE='treatment', ROT_COLOR='rot_treat', ROT_SHAPE='rot_treat')
-
-
-
-# TAGSEQ ------------------------------------------------------------------
-#gather mislabeled samples for tagseq
-
-ll=load('metadata/raw_tagseq_pca_df.Rdata')
-ll
-
-
-pca_df %>% 
-  ggplot(aes(x=PC1, y=PC2, color=colony)) +
-  geom_point(size=5)
-
-
-#identify mismatch
-n4_ts_mislab = pca_df %>% 
-  filter(PC2 > 0,
-         PC1 < 0,
-         colony !='N4')  %>% 
-  mutate(misAssay = 'ts',
-         misGeno = 'N4')
-
-#identify mismatch
-n1_ts_mislab = pca_df %>% 
-  filter(PC2 < 0,
-         colony !='L1',
-         colony !='N1') %>% 
-  mutate(misAssay = 'ts',
-         misGeno = 'N1')
-
-#merge tagseq misses with sample numbers to check for pairings
-ts_misses = rbind(n4_ts_mislab  %>% 
-                    dplyr::select(sampleNumber, colony, age, treatment, misGeno) %>% 
-                    dplyr::rename(colonyLabel = colony,
-                                  colonyPCA = misGeno) %>% 
-                    left_join(gsaf_tag, by = 'sampleNumber'),
-                  n1_ts_mislab  %>% 
-                    dplyr::select(sampleNumber, colony, age, treatment, misGeno) %>% 
-                    dplyr::rename(colonyLabel = colony,
-                                  colonyPCA = misGeno) %>% 
-                    left_join(gsaf_tag, by = 'sampleNumber'))
-
-#check treatment counts
-ts_misses %>% 
-  group_by(colonyPCA, treatment) %>% 
-  summarize(N=n())
-#so they line up
-
-table(ts_misses$i7oligo)
-table(ts_misses$treatment)
-table(ts_misses$colonyPCA)
-
-#build a pairing table
-n1pair = n1_ts_mislab %>% 
-  dplyr::select(sampleNumber, colonyLabel, age, treatment)
-n4pair = n4_ts_mislab %>% 
-  dplyr::select(sampleNumber, colonyLabel, age, treatment)
-cbind(n1pair, n4pair)
-
-# BUILD A GENOTYPE 96 WELL PLATE ------------------------------------------
-
-num_col = gsaf_tag %>% 
-  left_join(coldata, by = 'sampleNumber') %>% 
-  arrange(sampleNumber) %>% 
-  dplyr::select(sampleNumber,
-                colony)
-
-nums = num_col$sampleNumber
-genos = num_col$colony
-
-matrix(nums, nrow = 8, ncol=12)
-gm = matrix(genos, nrow=8, ncol=12)
-colnames(gm) = 1:12
-rownames(gm) = LETTERS[1:8]
-write.table(gm, file='troubleshoot_ids/genotype96well.tsv', quote=FALSE)
-
-# mdRAD ---------------------------------------------------------------
-#gather mislabeled samples for mdRAD
-
-#load fpkm data for gbm
-ll=load('mdRAD/data/mdRAD_geneFPKMs.Rdata')
-ll
-
-#build pca
-NTOP = round(nrow(geneFpkm) / 10, 0)
-pca_df = build_pca(geneFpkm, coldata,
-                   ntop = NTOP,
-                   pcs = 10)
-
-#plot for colony
-pca_df %>% 
-  ggplot(aes(x=PC1, y=PC2, color=colony)) +
-  geom_point(size=5)
-
-#check mixups
-pca_df %>% 
-  filter(PC1 < -500) %>% 
-  pull(colony) %>% 
-  table()
-
-#check mixups
-n1_mr_mislab = pca_df %>% 
-  filter(PC1 < -500,
-         colony != 'N1') %>% 
-  mutate(misAssay = 'mr',
-         misGeno = 'N1')
-
-
-#check mixups
-l1_mr_mislab = pca_df %>% 
-  filter(PC1 > 0,
-         PC2 > 0,
-         colony != 'L1') %>% 
-  mutate(misAssay = 'mr',
-         misGeno = 'L1')
-
-#check mixups
-n4_mr_mislab = pca_df %>% 
-  filter(PC1 > 0,
-         PC2 < 0,
-         colony != 'N4') %>% 
-  mutate(misAssay = 'mr',
-         misGeno = 'N4')
-
-
-
-# ASSEMBLE ALL MISLABELES -------------------------------------------------
-
-miss = list(l1_mr_mislab,
-                 n1_mr_mislab,
-                 n1_ts_mislab,
-                 n4_mr_mislab,
-                 n4_ts_mislab) %>% 
-  purrr::reduce(rbind) %>% 
-  as_tibble() %>% 
-  dplyr::select(sampleNumber, colony, age, treatment, timepointTemp, notebookPg, misAssay, misGeno)
-
-miss
-
-
-
-
-#SLICE OUT THE MISLABELED SAMPLE NUMBERS
-cdat = coldata
-
-miss_nums = unique(miss$sampleNumber)
-length(miss_nums)
-mgsaf = gsaf2 %>% 
-  filter(sampleNumber %in% miss$sampleNumber) %>% 
-  left_join(cdat, by = 'sampleNumber') %>% 
-  dplyr::select(SampleName:treatment) %>% 
-  separate(SampleName, into = c('assay', 'snum'))
-table(mgsaf$i7oligo)
-
-
-# TRY TO RESOLVE FROM TAGSEQ ----------------------------------------------
-
-#could not find any mistakes in the spreadsheets
-#now try to use tagseq to figure out how mismaches occured
-
-ll=load('metadata/raw_tagseq_pca_df.Rdata')
-ll
-
-#genotype as called before
-pca_df %>% 
+fixed_tag_pca_df = build_pca(rld.df, fixed_coldata,
+                       ntop = NTOP,
+                       pcs = 2)
+
+fixed_tag_plt = fixed_tag_pca_df %>% 
   ggplot(aes(x=PC1, y=PC2, color=colony)) +
   geom_point(size=4)
 
-#modify coldata for troubleshooting
-early = c('initial', '3 days of heat')
-tag_miss = miss %>% 
-  filter(misAssay=='ts') %>% 
-  dplyr::select(sampleNumber, misGeno) %>% 
-  rename(genoByData = misGeno)
 
 
-coldata = coldata %>% 
-  left_join(tag_miss, by='sampleNumber') %>% 
-  mutate(broad_time = if_else(timepointDescription %in% early,
-                              'first3days',
-                              'last3days'),
-         genoByData = if_else(is.na(genoByData),
-                              colony,
-                              genoByData))
+# replot the genotypes with fixed info ------------------------------------
 
-
-
-# PLOT WITH GENOTYPES FROM PCA --------------------------------------------
-
-NTOP = round(nrow(rld.df) / 10, 0)
-pca_df = build_pca(rld.df, coldata,
-                   ntop = NTOP,
-                   pcs = 10)
-
-#original genotype calls
-pca_df %>% 
-  ggplot(aes(x=PC1, y=PC2, color=colony)) +
-  geom_point(size=4)
-
-#fixed genotype calls
-pca_df %>% 
-  ggplot(aes(x=PC1, y=PC2, color=genoByData)) +
-  geom_point(size=4)
-
-
-#sample timepoint 
-pca_df %>% 
-  ggplot(aes(x=PC1, y=PC2, color=timepointDescription)) +
-  geom_point(size=4)
-
-
-# SET THINGS UP BY SAMPLE NUMBER FOR SIMPLICITY ---------------------------
-
-#rld
-rld_bynum = rld.df
-rev1 = sapply(colnames(rld.df), function(x) strsplit(x, '_')[[1]][1])
-num_str = sub('tagSeq.', '', rev1, fixed=TRUE)
-colnames(rld_bynum) = num_str
-
-#coldata
-coldata$num_str = as.character(coldata$sampleNumber)
-
-
-
-# USE L1 TO SEE WHAT VARIATION SHOULD LOOK LIKE ---------------------------
-
-
-
-geno_coldata = coldata %>% 
-  filter(colony=='L1')
-geno_rld = rld_bynum[,geno_coldata$num_str]
-
-geno_pca = build_pca(geno_rld, geno_coldata, ntop=NTOP)
-
-#with all timepoints
-geno_pca %>% 
-  ggplot(aes(x=PC1, y=PC2, color = timepointDescription, shape=treatment)) +
-  geom_point(size=4) +
-  labs(subtitle='L1 colony')
-
-#with broad timepoints
-geno_pca %>% 
-  ggplot(aes(x=PC1, y=PC2, color = broad_time, shape=age)) +
-  geom_point(size=4)
-
-#CHECK WITHIN TIMEPOINTS
-NTOP=10000
-unique(geno_coldata$timepointDescription)
-
-#check 3 days
-tp="3 days of heat"
-sub_coldata = geno_coldata %>% 
-  filter(timepointDescription==tp)
-sub_rld = rld_bynum[,sub_coldata$num_str]
-sub_pca = build_pca(sub_rld, sub_coldata, ntop=NTOP)
-sub_pca %>% 
-  ggplot(aes(x=PC1, y=PC2, color=timepointTemp, shape=treatment)) +
-  geom_point(size=4)
-
-
-tp="14 days of heat"
-sub_coldata = geno_coldata %>% 
-  filter(timepointDescription==tp)
-sub_rld = rld_bynum[,sub_coldata$num_str]
-sub_pca = build_pca(sub_rld, sub_coldata, ntop=NTOP)
-sub_pca %>% 
-  ggplot(aes(x=PC1, y=PC2, color=timepointTemp, shape=treatment)) +
-  geom_point(size=4)
-
-
-# CHECK WITH N1 as called -----------------------------------------------------------
-
-geno_coldata = coldata %>% 
-  filter(colony=='N1')
-geno_rld = rld.df[,geno_coldata$sampleNumber]
-
-geno_pca = build_pca(geno_rld, geno_coldata, ntop=NTOP)
-
-#with broad timepoints
-geno_pca %>% 
-  ggplot(aes(x=PC1, y=PC2, color = broad_time, shape=genoByData)) +
-  geom_point(size=4)
-
-
-# CHECK WITH N1 by data -----------------------------------------------------------
-
-geno_coldata = coldata %>% 
-  filter(genoByData=='N1')
-geno_rld = rld.df[,geno_coldata$sampleNumber]
-
-geno_pca = build_pca(geno_rld, geno_coldata, ntop=NTOP)
-
-
-#with all timepoints
-geno_pca %>% 
-  ggplot(aes(x=PC1, y=PC2, color = timepointDescription, shape=treatment)) +
-  geom_point(size=4)
-
-#with broad timepoints
-geno_pca %>% 
-  ggplot(aes(x=PC1, y=PC2, color = broad_time, shape=colony)) +
-  geom_point(size=4)
-
-
-
-
-# CHECK WITH N4 -----------------------------------------------------------
-
-geno_coldata = coldata %>% 
-  filter(colony=='N4')
-geno_rld = rld.df[,geno_coldata$sampleNumber]
-
-geno_pca = build_pca(geno_rld, geno_coldata, ntop=NTOP)
-
-#with broad timepoints
-geno_pca %>% 
-  ggplot(aes(x=PC1, y=PC2, color = broad_time, shape=genoByData)) +
-  geom_point(size=4)
-
-
-# CHECK WITH N4 FROM DATA -------------------------------------------------
-
-geno_coldata = coldata %>% 
-  filter(genoByData=='N4')
-geno_rld = rld.df[,geno_coldata$sampleNumber]
-
-geno_pca = build_pca(geno_rld, geno_coldata, ntop=NTOP)
-
-
-#with broad timepoints
-geno_pca %>% 
-  ggplot(aes(x=PC1, y=PC2, color = broad_time, shape=genoByData)) +
-  geom_point(size=4)
-
-#with broad timepoints
-geno_pca %>% 
-  ggplot(aes(x=PC1, y=PC2, color = broad_time, shape=genoByData)) +
-  geom_point(size=4)
-
-
-
-
-
-
-
-
-#build pca
-NTOP = round(nrow(geneFpkm) / 5, 0)
-pca_df = build_pca(geneFpkm, coldata,
-                   ntop = NTOP,
-                   pcs = 10)
-
-#look into n1 based on the data
-n1_bydat = pca_df %>% 
-  rownames_to_column('sampleID') %>% 
-  filter(PC1 < 0 & PC2 > 0)
-
-
-geno_rld = rld.df[,n1_bydat$sampleID]
-geno_coldata = coldata[n1_bydat$sampleNumber,]
-dim(geno_rld)
-dim(geno_coldata)
-geno_pca = build_pca(geno_rld, geno_coldata,
-                   ntop = NTOP,
-                   pcs = 10) %>% 
-  rownames_to_column('sampleID') %>% 
+#remerge genotype data with fixed coldata
+fixed_geno_pca_df =  pca$scores %>% 
+  data.frame() %>% 
+  rownames_to_column('sample') %>% 
+  mutate(sampleNumber = sample_numbers_from_names(sample),
+         assay = substr(sample, start=1, stop=5)) %>% 
+  left_join(fixed_coldata) %>% 
   as_tibble()
 
-g = geno_pca %>% 
-  ggplot(aes(x=PC1, y=PC2, color = colony)) +
+
+#pull the genotype data from mdRAD
+fixed_md_geno0 = fixed_geno_pca_df %>% 
+  filter(assay=='mdRAD') %>% 
+  dplyr::select(sampleNumber, colony, PC1, PC2, assay) %>% 
+  left_join(rs_dat)
+
+#set colony ids for rotated sample Numbers
+fixed_md_colonies = fixed_md_geno0$colony
+names(fixed_md_colonies) = as.character(fixed_md_geno0$rot_sampleNumber)
+
+#build fixed df
+fixed_md_geno = fixed_md_geno0 %>% 
+  mutate(colony = fixed_md_colonies[as.character(sampleNumber)]) %>% 
+  dplyr::select(sampleNumber, colony, PC1, PC2, assay)
+
+
+#fix for tagseq
+fixed_tag_geno = fixed_geno_pca_df %>% 
+  filter(assay=='tagSe') %>% 
+  dplyr::select(sampleNumber, colony, PC1, PC2, assay)
+
+#bind them and plot
+fixed_geno = rbind(fixed_md_geno, fixed_tag_geno)
+fixed_gplt = fixed_geno %>% 
+  ggplot(aes(x=PC1, y=PC2, color=colony, shape = assay)) +
   geom_point(size=4)
 
-t = geno_pca %>% 
-  ggplot(aes(x=PC1, y=PC2, color = treatment, shape=colony)) +
-  geom_point(size=4)
-
-geno_pca %>% 
-  filter(colony=='N4') %>% 
-  ggplot(aes(x=PC1, y=PC2, color = timepointTemp, shape=colony)) +
-  geom_point(size=4)
 
 
+# plot to show all fixes --------------------------------------------------
+
+pans = plot_grid(gplt,
+          fixed_gplt,
+          ori_md_plt,
+          fixed_md_plt,
+          ori_tag_plt,
+          fixed_tag_plt,
+          nrow=3)
+col1 = ggdraw() + draw_label('original', fontface ='bold')
+col2 = ggdraw() + draw_label('fixed', fontface ='bold')
+row1 = ggdraw() + draw_label('SNPs', angle=90, fontface ='bold')
+row2 = ggdraw() + draw_label('mdRAD', angle=90, fontface ='bold')
+row3 = ggdraw() + draw_label('tag-seq', angle=90, fontface ='bold')
+cols = plot_grid(col1, col2, nrow=1)
+rows = plot_grid(row1, row2, row3, nrow=3)
+right=plot_grid(cols, pans, nrow=2, rel_heights = c(1,20))
+plot_grid(rows, right, rel_widths = c(1,20))
+
+
+# finally, build commands to correct the mdRAD file names -----------------
+
+rs_dat
+ori = sub('.', '-', rs_dat$sampleID, fixed=TRUE)
+rot = sub('.', '-', rs_dat$rot_sampleID, fixed=TRUE)
+
+copy_commands = c('mkdir fixed')
+for (i in 1:length(ori)){
+  original = ori[i]
+  new = rot[i]
+  clane1 = paste('cp ', original, '_L001_R1_001.fastq fixed/', new, '_L001_R1_001.fastq', sep='')
+  clane2 = paste('cp ', original, '_L002_R1_001.fastq fixed/', new, '_L001_R1_002.fastq', sep='')
+  copy_commands = append(copy_commands, clane1)
+  copy_commands = append(copy_commands, clane2)
+}
+
+#write out
+fileConn<-file('troubleshoot_ids/rotate_mdRAD_fastq_commands.txt')
+writeLines(copy_commands, fileConn)
+close(fileConn)
+
+#save name switches for temp fixes
+save(rs_dat, file='troubleshoot_ids/name_rotations.Rdata')
 

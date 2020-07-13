@@ -5,6 +5,7 @@ rm(list=ls())
 library(vegan)
 library(gtools)
 library(DESeq2)
+library(limma)
 source('my_functions.R')
 
 
@@ -14,65 +15,42 @@ source('my_functions.R')
 ll=load('mdRAD/data/mdRAD_geneFPKMs.Rdata')
 ll
 
+
 #build pca
 NTOP = round(nrow(geneFpkm) / 5, 0)
 pca_df = build_pca(geneFpkm, coldata,
           ntop = NTOP,
           pcs = 10)
 
-rownames(pca_df)==colnames(geneFpkm)
-sample = sapply(colnames(geneFpkm), function(x) strsplit(x, '_')[[1]][1])
-snum = sub('mdRAD.', '', sample, fixed = TRUE)
-data.frame(colnames = colnames(counts),
-           sample = sample,
-           snum = snum)
-snum == coldata$sampleNumber
-
-
 #plot for colony
 pca_df %>% 
   ggplot(aes(x=PC1, y=PC2, color=colony)) +
   geom_point(size=5)
 
-#check mixups
-pca_df %>% 
-  filter(PC1 < -500) %>% 
-  pull(colony) %>% 
-  table()
-
-#check mixups
-n1_mr_mislab = pca_df %>% 
-  rownames_to_column('sampleID') %>% 
-  filter(PC1 < -500,
-         colony != 'N1') 
 
 
-#check mixups
-l1_mr_mislab = pca_df %>% 
-  filter(PC1 > 0,
-         PC2 > 0,
-         colony != 'L1')
-
-#check mixups
-n4_mr_mislab = pca_df %>% 
-  rownames_to_column('sampleID') %>% 
-  filter(PC1 > 0,
-         PC2 < 0,
-         colony != 'N4')
+# PCA FOR TAG-SEQ ---------------------------------------------------------
 
 
+#load
+ll = load('tagSeq/data/rld.Rdata')
+ll
 
-miss = rbind(n1_mr_mislab, n4_mr_mislab)
+#build pca
+rld.df = data.frame(assay(rld))
+NTOP = round(nrow(rld.df) / 5, 0)
+tag_pca_df = build_pca(rld.df, coldata,
+                       ntop = NTOP,
+                       pcs = 2)
 
-
-miss %>% 
-  write_csv(path='~/Desktop/mdRAD_missmatches.csv')
+tag_plt = tag_pca_df %>% 
+  ggplot(aes(x=PC1, y=PC2, color=colony)) +
+  geom_point(size=4)
+tag_plt
 
 
 
 
-
-#STUFF TO REVISE FOR THIS PROJECT BELOW
 
 
 

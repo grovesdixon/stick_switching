@@ -41,7 +41,7 @@ counts=cc[means>cut,]
 
 #SET UP COLDATA
 #read in
-coldata = read_csv('metadata/sample_information_table.csv')
+coldata = read_csv('metadata/sample_information_table.csv') #this is the corrected version
 
 #check agreement
 samples = sub('tagSeq.', '', colnames(counts), fixed=TRUE)
@@ -147,29 +147,7 @@ addy=2
 pca_df %>% 
   ggplot(aes(x=PC1, y=PC2, color=colony)) +
   geom_point(size=5)
-#DESEQ PCA to double-check
-plotPCA(rld, intgroup = "colony",
-        ntop = NTOP, returnData = FALSE)
 
-
-#identify mismatch
-tagMismatched_to_N4 = pca_df %>% 
-  rownames_to_column('sampleID') %>% 
-  filter(PC2 > 0,
-         PC1 < 0,
-         colony !='N4')
-
-#identify mismatch
-tagMismatched_to_N1 = pca_df %>% 
-  rownames_to_column('sampleID') %>% 
-  filter(PC2 < 0,
-         colony !='L1',
-         colony !='N1')
-
-
-rbind(tagMismatched_to_N4, tagMismatched_to_N1) %>% 
-  write_csv('~/Desktop/tagseq_mismatches.csv')
-  
 
 #now cluster samples based on gene expression to identify outliers
 sampleTree = hclust(dist(datExpr0), method = "average");
@@ -180,40 +158,6 @@ sizeGrWindow(12,9)
 par(cex = 0.6);
 par(mar = c(0,5,2,0))
 plot(sampleTree, main = "Sample clustering to detect outliers", sub="", xlab="", cex.lab = 1.5, cex.axis = 1.5, cex.main = 2)
-
-
-#=====================================================================================
-#
-#  Code chunk 6
-# 
-#=====================================================================================
-
-#Remove outliers by setting a branch cut threshold
-# Plot a line to show the cut
-cut.height = 110
-plot(sampleTree, main = "Sample clustering to detect outliers", sub="", xlab="", cex.lab = 1.5, cex.axis = 1.5, cex.main = 2)
-abline(h = cut.height, col = "red", lty = 2);
-
-# Determine cluster under the line
-clust = cutreeStatic(sampleTree, cutHeight = cut.height, minSize = 4)
-table(clust)
-# clust 1 contains the samples we want to keep.
-keepSamples = (clust==1)
-keepSampleNames = rownames(datExpr0)[keepSamples]
-outlierNames = rownames(datExpr0)[clust==0]
-datExpr = datExpr0[keepSamples, ]
-nGenes = ncol(datExpr)
-nSamples = nrow(datExpr) #number of samples left after outlier removal
-print(paste(length(outlierNames), "samples were flagged as outliers and removed:"))
-outlierNames
-print(paste(nSamples, "samples were kept"))
-
-
-#replot heatmap without outlier
-rld.df = rld.df[, !colnames(rld.df) %in% outlierNames]
-coldata = coldata[!rownames(coldata) %in% outlierNames, ]
-pheatmap(cor(rld.df), labels_col= substr(coldata$treatment, start=1,stop=1))
-
 
 
 #save the outlier names so you can optionally remove them in other analyses
