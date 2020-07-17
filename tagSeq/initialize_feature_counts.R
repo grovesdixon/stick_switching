@@ -7,35 +7,30 @@ source('my_functions.R')
 
 rnaDir='tagSeq/data/'
 
-#upload read counts from htseq
+#upload read counts features counts
 countsFile=paste(rnaDir, 'feature_counts_out.tsv', sep='')
 counts = read.table(countsFile, header = T, row.names='Geneid')
 counts = counts[,6:ncol(counts)]
 revisedNames = sub('_dupsRemoved.bam', '', colnames(counts))
 colnames(counts) = revisedNames
 counts = sort_counts(counts, subout='tagSeq.')
+
+#look at counts matrix
 head(counts)
-length(unique(colnames(counts)))
-
-
-#remove non-gene objects from counts data
 dim(counts)
+length(unique(colnames(counts))) #96 samples
+nrow(counts) #28188 genes
 tots = apply(counts, 2, sum)
-print(paste("Mean read count per sample =", paste(round(mean(tots) / 1e6, 2), "million reads")))
-
-
-#get count totals
-tots = apply(counts, 2, sum)
-hist(tots)
 print(paste("Mean read count per sample =", paste(round(mean(tots) / 1e6, 2), "million reads")))
 
 
 #remove genes with low coverage
 cut=3
 cc=counts
-means=apply(cc,1,mean)
-table(means>cut)
-counts=cc[means>cut,]
+means=apply(cc,1,mean) #get the average count for each gene using apply()
+table(means>cut)       #look at how many genes have average count greater than the chosen 'cut'
+counts=cc[means>cut,]  #reduce the counts matrix to only those genes
+nrow(counts)           #show the number of genes with enough coverage to keep
 
 
 
@@ -43,19 +38,16 @@ counts=cc[means>cut,]
 #read in
 coldata = read_csv('metadata/sample_information_table.csv') #this is the corrected version
 
-#check agreement
+#check agreement (make sure the sample numbers in the coldata table match those in the counts column names)
 samples = sub('tagSeq.', '', colnames(counts), fixed=TRUE)
 snums = sapply(samples, function(x) strsplit(x, '_')[[1]][1]) %>% 
   as.numeric()
-sum(snums==coldata$sampleNumber)==nrow(coldata)
-
-check = data.frame(colnames = colnames(counts),
-           sample_numbers = snums)
-cbind(check, coldata)
-
+sum(snums==coldata$sampleNumber)==nrow(coldata) #do they match?
 
 
 #------- GET RAW VARIANCE STABILIZED COUNTS ------------#
+#use DESEq2 to get a matrix of variance stabilized counts
+#this is similar to getting an FPKM matrix
 #set up input matrix for DESeq
 ddsHTSeq<-DESeqDataSetFromMatrix(counts,
 	colData = coldata,
@@ -67,7 +59,7 @@ dds = DESeq(ddsHTSeq)
 #get DEseq results
 res = results(dds)
 
-#get variance stabilized counts and save them
+#get variance stabilized counts
 rld = vst(dds)
 rld.df=assay(rld)
 colnames(rld.df) = colnames(counts)
@@ -79,8 +71,10 @@ colnames(rld.df) = colnames(counts)
 #  Code chunk 2
 # transpose the dataset you have samples as rows and genes as columns
 #=====================================================================================
-
+#transpose the rld matrix
 datExpr0 = as.data.frame(t(rld.df));
+dim(rld.df)
+dim(datExpr0)
 
 #=====================================================================================
 #
@@ -164,8 +158,19 @@ plot(sampleTree, main = "Sample clustering to detect outliers", sub="", xlab="",
 # save(outlierNames, file = 'datasets/outliers.Rdata')
 dim(counts)
 dim(coldata)
-deseqInfile=paste(rnaDir, 'deseqInput.Rdata', sep='')
+
+#save the variance stabilized counts
 rldFile=paste(rnaDir, 'rld.Rdata', sep='')
-save(counts, coldata, file=deseqInfile)
 save(rld, coldata, file=rldFile)
+
+#save the filtered raw counts for DESeq2 analysis
+deseqInfile=paste(rnaDir, 'deseqInput.Rdata', sep='')
+
+#standardize the colnames and rownames for counts and coldata
+snum = sapply(colnames(counts), function(x) strsplit(x, '_')[[1]][1])
+snum = as.numeric(sub('tagSeq.', '', snum, fixed=TRUE))
+colnames(counts) = snum
+coldata = data.frame(coldata)
+rownames(coldata) = snum
+save(counts, coldata, file=deseqInfile)
 
