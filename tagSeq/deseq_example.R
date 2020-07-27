@@ -1,5 +1,5 @@
 #deseq_example.R
-
+library(DESeq2)
 
 # load inputs for deseq ---------------------------------------------------
 #(these were created in initialize_feature_counts.R)
