@@ -2,6 +2,7 @@
 
 rm(list=ls())
 source('my_functions.R')
+source('./mdRAD/methylRAD_functions.R')
 
 # READ IN BEDTOOLS COUNTS -------------------------------------------------
 
