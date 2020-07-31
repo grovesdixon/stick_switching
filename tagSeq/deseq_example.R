@@ -1,5 +1,6 @@
 #deseq_example.R
 library(DESeq2)
+library(tidyverse)
 
 # load inputs for deseq ---------------------------------------------------
 #(these were created in initialize_feature_counts.R)
@@ -7,10 +8,6 @@ ll = load('tagSeq/data/deseqInput.Rdata')
 ll #look at the two object names that were loaded
 head(counts) #the processesed counts matrix
 head(coldata) #the table of sample traits
-
-#to make manipulations easier, lets assign 
-
-
 
 #note that we have lots of features that could influence the gene expression in these samples
 #based on previous studies, and from the PCA, we expect colony to be an important source of gene expression variation
@@ -22,8 +19,14 @@ unique(coldata$treatment)
 #the age of the branch (whether it was from middle or outside of the colony) probably doesn't influence expression a lot
 unique(coldata$age) #y=young; o=old
 
+
 #the timepoint Temp (time during the data samples were taken, morning or afternoon hence cool or hot)
-unique(coldata$timepointTemp) #note some of these have missing values, let's just remove these for now
+unique(coldata$timepointTemp) #note some of these have missing values
+no_tpt = coldata %>% 
+  filter(is.na(coldata$timepointTemp))
+view(no_tpt)
+
+#let's just remove those for now
 coldata = coldata[!is.na(coldata$timepointTemp),]
 counts = counts[,rownames(coldata)]
 dim(coldata)
